@@ -209,6 +209,10 @@ def main():
             st.markdown("### 🗺️ Phân loại khu vực")
 
             if classification['region'] != 'unknown':
+                # Màu sắc cho NỘI Ô / NGOẠI Ô
+                area_color = '#4CAF50' if classification.get('area_type') == 'noi_o' else '#FF9800'
+                area_icon = '🏙️' if classification.get('area_type') == 'noi_o' else '🌾'
+
                 st.markdown(f"""
                 <div class="success-box">
                     <h3>✅ {classification['region_name']}</h3>
@@ -217,6 +221,21 @@ def main():
                     <p><strong>Từ khóa khớp:</strong> {', '.join(classification['matched_keywords'])}</p>
                 </div>
                 """, unsafe_allow_html=True)
+
+                # Hiển thị NỘI Ô / NGOẠI Ô nổi bật
+                if classification.get('area_type') != 'unknown':
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, {area_color}22, {area_color}44);
+                                padding: 1.5rem;
+                                border-radius: 1rem;
+                                border: 3px solid {area_color};
+                                margin: 1rem 0;
+                                text-align: center;">
+                        <h2 style="color: {area_color}; margin: 0; font-size: 2.5rem;">
+                            {area_icon} {classification.get('area_name', 'Không xác định')}
+                        </h2>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
                 st.markdown("""
                 <div class="warning-box">
