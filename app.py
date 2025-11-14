@@ -170,7 +170,9 @@ def main():
 
         # Thông tin phiên bản
         st.caption("Version 1.0.0")
-        st.caption("© 2024 OCR Postal Label System")
+        st.caption("© 2025 OCR Postal Label System")
+        st.markdown("[![GitHub](https://img.shields.io/badge/GitHub-mttk2004-181717?style=flat&logo=github)](https://github.com/mttk2004)")
+        st.caption("⭐ Star trên GitHub nếu project hữu ích!")
 
     # Main content
     col1, col2 = st.columns([1, 1])
