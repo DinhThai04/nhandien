@@ -155,16 +155,6 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.header("⚙️ Cấu hình")
-
-        # Thông tin khu vực
-        st.subheader("📍 Khu vực giao hàng")
-        regions = classifier.get_all_regions()
-        for region in regions:
-            st.info(f"**{region['name']}** ({region['code']}): {region['province_count']} tỉnh/thành")
-
-        st.divider()
-
         # Hướng dẫn sử dụng
         st.subheader("📖 Hướng dẫn")
         st.markdown("""
