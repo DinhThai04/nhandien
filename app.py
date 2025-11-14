@@ -110,9 +110,11 @@ def process_image(image, ocr_engine, classifier, processor):
             ocr_result = ocr_engine.extract_text_with_confidence(str(processed_path))
             structured_data = ocr_engine.extract_structured_data(str(processed_path))
 
-        # Phân loại khu vực
+        # Phân loại khu vực - ƯU TIÊN địa chỉ người nhận
         with st.spinner("🗺️ Đang phân loại khu vực..."):
-            classification = classifier.classify(ocr_result['text'])
+            # Dùng địa chỉ người nhận nếu có, fallback sang toàn bộ text
+            address_to_classify = structured_data.get('recipient_address', '') or ocr_result['text']
+            classification = classifier.classify(address_to_classify)
 
         return {
             'ocr': ocr_result,

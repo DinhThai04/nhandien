@@ -256,6 +256,10 @@ class RegionClassifier:
         """
         Phân loại NỘI Ô / NGOẠI Ô dựa trên địa chỉ
 
+        Logic đơn giản:
+        - NỘI Ô = Thành phố Hồ Chí Minh
+        - NGOẠI Ô = Tất cả các tỉnh/thành khác
+
         Args:
             text: Text đã normalize (lowercase)
             province: Tỉnh/Thành phố đã được xác định
@@ -268,46 +272,30 @@ class RegionClassifier:
             'area_name': 'Không xác định'
         }
 
-        # Từ khóa NỘI Ô (Urban) - Quận hoặc Thành phố trung tâm
-        urban_keywords = [
-            'quận 1', 'quận 2', 'quận 3', 'quận 4', 'quận 5',
-            'quận 6', 'quận 7', 'quận 8', 'quận 9', 'quận 10',
-            'quận 11', 'quận 12', 'quận phú nhuận', 'quận tân bình',
-            'quận bình thạnh', 'quận gò vấp', 'quận tân phú',
-            'ba đình', 'hoàn kiếm', 'hai bà trưng', 'đống đa',
-            'cầu giấy', 'thanh xuân', 'tây hồ', 'long biên',
-            'hải châu', 'thanh khê', 'sơn trà', 'ngũ hành sơn',
-            'thành phố thủ đức', 'tp thủ đức'
+        # Kiểm tra Thành phố Hồ Chí Minh
+        hcm_keywords = [
+            'hồ chí minh',
+            'tp hồ chí minh',
+            'tp. hồ chí minh',
+            'thành phố hồ chí minh',
+            'sài gòn',
+            'saigon',
+            'tp hcm',
+            'tp. hcm',
+            'hcm'
         ]
 
-        # Từ khóa NGOẠI Ô (Suburban) - Huyện hoặc khu vực xa trung tâm
-        suburban_keywords = [
-            'huyện', 'thị xã', 'thị trấn',
-            'củ chi', 'hóc môn', 'bình chánh', 'nhà bè', 'cần giờ',
-            'sóc sơn', 'đông anh', 'gia lâm', 'thanh trì', 'thường tín',
-            'hoàng mai', 'hà đông', 'sơn tây', 'ba vì',
-            'hòa vang', 'hoàng sa'
-        ]
+        # Kiểm tra trong text hoặc province
+        text_to_check = (text + ' ' + province.lower()).lower()
 
-        # Kiểm tra từ khóa NỘI Ô trước (ưu tiên cao hơn)
-        for keyword in urban_keywords:
-            if keyword in text:
+        for keyword in hcm_keywords:
+            if keyword in text_to_check:
                 result['area_type'] = 'noi_o'
                 result['area_name'] = 'NỘI Ô'
                 return result
 
-        # Kiểm tra từ khóa NGOẠI Ô
-        for keyword in suburban_keywords:
-            if keyword in text:
-                result['area_type'] = 'ngoai_o'
-                result['area_name'] = 'NGOẠI Ô'
-                return result
-
-        # Heuristic: Nếu có "quận" → NỘI Ô, có "huyện" → NGOẠI Ô
-        if 'quận' in text and 'huyện' not in text:
-            result['area_type'] = 'noi_o'
-            result['area_name'] = 'NỘI Ô'
-        elif 'huyện' in text:
+        # Nếu không phải HCM và đã xác định được tỉnh → NGOẠI Ô
+        if province and province.strip():
             result['area_type'] = 'ngoai_o'
             result['area_name'] = 'NGOẠI Ô'
 
