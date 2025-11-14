@@ -29,7 +29,7 @@ class PostalLabelParser:
             'sender_address': '',
             'sender_phone': '',
             'recipient_name': '',
-            'recipient_address': '',
+            'recipient_address': '',  # QUAN TRỌNG NHẤT - dùng để phân loại nội ô/ngoại ô
             'recipient_phone': '',
             'postal_code': '',
             'weight': '',
@@ -55,11 +55,12 @@ class PostalLabelParser:
                 if len(all_phones) > 0:
                     result['sender_phone'] = all_phones[0]
 
-            # 5. Trích xuất thông tin người nhận
+            # 5. Trích xuất thông tin người nhận (QUAN TRỌNG NHẤT)
             if recipient_section:
+                # Tập trung vào địa chỉ người nhận - dùng để phân loại nội ô/ngoại ô
+                result['recipient_address'] = self._extract_address_after_name(recipient_section, '')
+                # Các field khác ít quan trọng hơn
                 result['recipient_name'] = self._extract_name_simple(recipient_section, after='nhận')
-                result['recipient_address'] = self._extract_address_after_name(recipient_section, result['recipient_name'])
-                # Lấy số điện thoại thứ 2 nếu có (thường là người nhận)
                 if len(all_phones) > 1:
                     result['recipient_phone'] = all_phones[1]
 
@@ -124,26 +125,25 @@ class PostalLabelParser:
         return ''
 
     def _extract_address_after_name(self, text: str, name: str) -> str:
-        """Trích xuất địa chỉ SAU tên - chiến lược: tìm tên trước, rồi tìm địa chỉ sau"""
-        if not name:
-            return ''
+        """Trích xuất địa chỉ SAU tên - ƯU TIÊN địa chỉ người nhận"""
+        # List tỉnh/thành phố mở rộng
+        provinces = [
+            'Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Bình Dương', 'Đồng Nai',
+            'Bà Rịa', 'Thủ Đầu Một', 'Cần Thơ', 'Hải Phòng', 'Long An'
+        ]
 
-        # Tìm vị trí của tên trong text
-        name_pos = text.find(name)
-        if name_pos == -1:
-            return ''
+        # Xác định vùng tìm kiếm
+        search_text = text
+        if name:
+            name_pos = text.find(name)
+            if name_pos >= 0:
+                search_text = text[name_pos + len(name):]
 
-        # Lấy text SAU tên
-        after_name = text[name_pos + len(name):]
-
-        # Tìm địa chỉ trong text sau tên
-        provinces = ['Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Bình Dương', 'Đồng Nai', 'Bà Rịa', 'Thủ Đầu Một']
-
+        # Chiến lược 1: Tìm "Số" + số + ... + tỉnh (chuẩn địa chỉ VN)
         for province in provinces:
-            if province in after_name:
-                # Pattern đơn giản: số (1-4 digit) + bất cứ gì + tỉnh
-                pattern = rf'(\d{{1,4}}\s+.{{15,}}?{province})'
-                match = re.search(pattern, after_name, re.IGNORECASE)
+            if province in search_text:
+                pattern = rf'(Số\s+\d+.{{10,}}?{province})'
+                match = re.search(pattern, search_text, re.IGNORECASE)
                 if match:
                     address = match.group(1)
                     # Làm sạch
@@ -154,18 +154,18 @@ class PostalLabelParser:
                     if len(address) >= 20:
                         return address
 
-        # Fallback: tìm "Số" + số + ... + tỉnh
+        # Chiến lược 2: Tìm số 1-4 chữ số + text dài + tỉnh
         for province in provinces:
-            if province in after_name:
-                pattern = rf'(Số\s+\d+.{{10,}}?{province})'
-                match = re.search(pattern, after_name, re.IGNORECASE)
+            if province in search_text:
+                pattern = rf'(\d{{1,4}}\s+.{{15,}}?{province})'
+                match = re.search(pattern, search_text, re.IGNORECASE)
                 if match:
                     address = match.group(1)
                     address = re.sub(r'\s+', ' ', address)
-                    address = re.split(r'(?:Trọng|Order|\d{10,})', address, flags=re.IGNORECASE)[0]
+                    address = re.split(r'(?:Trọng|Order|\d{{10,}})', address, flags=re.IGNORECASE)[0]
                     address = address.strip(' ,.-')
-                    if len(address) >= 15:
-                        return address[:120]
+                    if len(address) >= 20:
+                        return address
 
         return ''
 
