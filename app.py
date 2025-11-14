@@ -248,18 +248,40 @@ def main():
                 st.metric("Độ tin cậy OCR", f"{ocr_result['confidence']:.1f}%")
 
             # Dữ liệu có cấu trúc
-            with st.expander("📋 Thông tin trích xuất"):
+            with st.expander("📋 Thông tin trích xuất", expanded=True):
                 structured = st.session_state.structured_data
 
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.text_input("📞 Số điện thoại", structured['phone'], disabled=True)
-                    st.text_input("📮 Mã bưu chính", structured['postal_code'], disabled=True)
+                # Người gửi
+                st.markdown("#### 📤 Người gửi")
+                col_s1, col_s2 = st.columns(2)
+                with col_s1:
+                    st.text_input("👤 Tên", structured.get('sender_name', ''), disabled=True, key='sender_name')
+                with col_s2:
+                    st.text_input("📞 SĐT", structured.get('sender_phone', ''), disabled=True, key='sender_phone')
+                st.text_area("📍 Địa chỉ", structured.get('sender_address', ''), height=60, disabled=True, key='sender_addr')
 
-                with col_b:
-                    st.text_area("📍 Địa chỉ", structured['address'], height=100, disabled=True)
+                st.divider()
 
-            # Ảnh đã xử lý
+                # Người nhận
+                st.markdown("#### 📥 Người nhận")
+                col_r1, col_r2 = st.columns(2)
+                with col_r1:
+                    st.text_input("👤 Tên", structured.get('recipient_name', ''), disabled=True, key='recipient_name')
+                with col_r2:
+                    st.text_input("📞 SĐT", structured.get('recipient_phone', ''), disabled=True, key='recipient_phone')
+                st.text_area("📍 Địa chỉ", structured.get('recipient_address', ''), height=60, disabled=True, key='recipient_addr')
+
+                st.divider()
+
+                # Thông tin khác
+                st.markdown("#### 📦 Thông tin đơn hàng")
+                col_o1, col_o2, col_o3 = st.columns(3)
+                with col_o1:
+                    st.text_input("📮 Mã bưu chính", structured.get('postal_code', ''), disabled=True, key='postal')
+                with col_o2:
+                    st.text_input("⚖️ Trọng lượng", structured.get('weight', ''), disabled=True, key='weight')
+                with col_o3:
+                    st.text_input("🔖 Order ID", structured.get('order_id', ''), disabled=True, key='order')            # Ảnh đã xử lý
             if 'processed_image' in st.session_state:
                 with st.expander("🖼️ Ảnh đã xử lý"):
                     processed_img = Image.open(st.session_state.processed_image)
@@ -272,18 +294,28 @@ def main():
             with col_d1:
                 # Download text
                 text_data = f"""
-=== KẾT QUẢ NHẬN DẠNG NHÃ BƯU KIỆN ===
+=== KẾT QUẢ NHẬN DẠNG NHÃN BƯU KIỆN ===
 
 KHU VỰC: {classification['region_name']}
 Độ tin cậy: {classification['confidence'] * 100:.1f}%
 Tỉnh/Thành: {classification.get('province', 'N/A')}
 
-THÔNG TIN:
-- Số điện thoại: {structured['phone']}
-- Địa chỉ: {structured['address']}
-- Mã bưu chính: {structured['postal_code']}
+NGƯỜI GỬI:
+- Tên: {structured.get('sender_name', '')}
+- SĐT: {structured.get('sender_phone', '')}
+- Địa chỉ: {structured.get('sender_address', '')}
 
-TEXT NHẬN DẠNG:
+NGƯỜI NHẬN:
+- Tên: {structured.get('recipient_name', '')}
+- SĐT: {structured.get('recipient_phone', '')}
+- Địa chỉ: {structured.get('recipient_address', '')}
+
+THÔNG TIN ĐỀN HÀNG:
+- Mã bưu chính: {structured.get('postal_code', '')}
+- Trọng lượng: {structured.get('weight', '')}
+- Order ID: {structured.get('order_id', '')}
+
+TEXT NHẬN DẠNG (RAW):
 {ocr_result['text']}
 """
                 st.download_button(

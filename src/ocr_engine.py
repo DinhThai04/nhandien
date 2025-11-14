@@ -179,65 +179,157 @@ class OCREngine:
         Trích xuất dữ liệu có cấu trúc từ nhãn bưu kiện
 
         Args:
-            image_path: Đường dẫn đến ảnh
+            image_path: Đường dẫn đến ảnh hoặc text đã OCR
 
         Returns:
             dict: Thông tin được trích xuất
         """
         result = {
+            'sender_name': '',
+            'sender_address': '',
+            'sender_phone': '',
             'recipient_name': '',
-            'phone': '',
-            'address': '',
+            'recipient_address': '',
+            'recipient_phone': '',
             'postal_code': '',
+            'weight': '',
+            'order_id': '',
             'raw_text': '',
             'confidence': 0
         }
 
         try:
-            # Lấy text với confidence
-            ocr_result = self.extract_text_with_confidence(image_path)
-            result['raw_text'] = ocr_result['text']
-            result['confidence'] = ocr_result['confidence']
+            # Lấy text với confidence (hoặc dùng text đã có)
+            import os
+            if isinstance(image_path, str) and os.path.isfile(image_path):
+                # Là đường dẫn file ảnh
+                ocr_result = self.extract_text_with_confidence(image_path)
+                text = ocr_result['text']
+                result['confidence'] = ocr_result['confidence']
+            else:
+                # Đã là text hoặc không phải file
+                text = str(image_path)
+                result['confidence'] = 0
 
-            # Phân tích text
-            lines = result['raw_text'].split('\n')
+            result['raw_text'] = text
 
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
+            # Sử dụng PostalLabelParser để trích xuất thông tin
+            from src.postal_label_parser import PostalLabelParser
+            parser = PostalLabelParser()
+            parsed = parser.parse(text)
 
-                # Tìm số điện thoại
-                if self._is_phone_number(line):
-                    result['phone'] = self._extract_phone_number(line)
-
-                # Tìm mã bưu chính
-                postal = self._extract_postal_code(line)
-                if postal:
-                    result['postal_code'] = postal
-
-                # Tìm địa chỉ (dòng chứa từ khóa địa chỉ)
-                if any(keyword in line.lower() for keyword in
-                      ['đường', 'phường', 'quận', 'huyện', 'tỉnh', 'thành phố']):
-                    result['address'] += line + ' '
-
-            # Làm sạch dữ liệu
-            result['address'] = result['address'].strip()
+            # Cập nhật result với dữ liệu đã parse
+            result.update(parsed)
 
             self.logger.info("Trích xuất dữ liệu có cấu trúc thành công")
             return result
 
         except Exception as e:
             self.logger.error(f"Lỗi khi trích xuất dữ liệu có cấu trúc: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return result
 
-    def _is_phone_number(self, text: str) -> bool:
-        """Kiểm tra xem text có phải số điện thoại không"""
-        # Loại bỏ khoảng trắng và ký tự đặc biệt
-        cleaned = ''.join(c for c in text if c.isdigit())
+    def _split_sender_recipient(self, text: str) -> tuple:
+        """Tách text thành phần người gửi và người nhận"""
+        import re
 
-        # Số điện thoại Việt Nam: 10-11 số, bắt đầu bằng 0
-        return len(cleaned) >= 10 and len(cleaned) <= 11 and cleaned.startswith('0')
+        # Tìm vị trí của "Người gửi" và "Người nhận"
+        sender_match = re.search(r'Ng[ưu]+[oơ]+i\s+g[ửữ]+i', text, re.IGNORECASE)
+        recipient_match = re.search(r'Ng[ưu]+[oơ]+i\s+nh[ậa]+n', text, re.IGNORECASE)
+
+        if sender_match and recipient_match:
+            sender_start = sender_match.start()
+            recipient_start = recipient_match.start()
+
+            if sender_start < recipient_start:
+                sender_section = text[sender_start:recipient_start]
+                recipient_section = text[recipient_start:]
+            else:
+                recipient_section = text[recipient_start:sender_start]
+                sender_section = text[sender_start:]
+        elif sender_match:
+            sender_section = text[sender_match.start():]
+            recipient_section = ''
+        elif recipient_match:
+            recipient_section = text[recipient_match.start():]
+            sender_section = ''
+        else:
+            # Không tìm thấy, thử tách theo vị trí
+            mid = len(text) // 2
+            sender_section = text[:mid]
+            recipient_section = text[mid:]
+
+        return sender_section, recipient_section
+
+    def _extract_name(self, text: str, person_type: str) -> str:
+        """Trích xuất tên người từ text"""
+        import re
+
+        # Pattern: Người gửi/nhận + TÊN (viết hoa chữ cái đầu) + số/địa chỉ
+        # VD: "Người gửi LUX PERFUMEE" hoặc "Người nhận Bùi Tuấn Vũ"
+        if person_type == 'sender':
+            # Tìm text sau "Người gửi" đến trước số hoặc địa chỉ
+            pattern = r'Ng[ưu]+[oơ]+i\s+g[ửữ]+i\s+([A-Z][A-Za-zÀ-ỹ\s]+?)(?=\s*\d|\s+[pqthđ]|$)'
+        else:
+            # Tìm text sau "Người nhận" đến trước số hoặc địa chỉ
+            pattern = r'Ng[ưu]+[oơ]+i\s+nh[ậa]+n\s+([A-Z][A-Za-zÀ-ỹ\s]+?)(?=\s*[A-Z]?\d|\s+[SsNn][ốoơ]|$)'
+
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            name = match.group(1).strip()
+            # Loại bỏ số và ký tự lạ ở cuối
+            name = re.sub(r'\s+\d.*$', '', name)
+            name = re.sub(r'\s{2,}', ' ', name)
+            # Chỉ lấy tối đa 5 từ (tên người thường không quá dài)
+            words = name.split()
+            if len(words) > 5:
+                name = ' '.join(words[:5])
+            return name.strip()
+
+        return ''
+
+    def _extract_address(self, text: str) -> str:
+        """Trích xuất địa chỉ từ text"""
+        import re
+
+        # Tìm địa chỉ dựa trên keywords
+        address_keywords = [
+            r'(?:Số\s+)?(\d+[A-Z]?\d*[,\s]+[^,\n]+?(?:phường|phư[oơ]+ng|quận|qu[aậ]+n|huyện|huy[eệ]+n|thành phố|tỉnh|thị xã)[^,\n]*(?:,\s*[^,\n]+)*)',
+            r'(\d+\s+[^,\n]+?(?:đường|[đd]u[oơ]+ng)[^,\n]*(?:,\s*[^,\n]+)*)',
+            r'((?:phường|quận|huyện|thành phố|tỉnh)\s+[^,\n]+(?:,\s*[^,\n]+)*)'
+        ]
+
+        for pattern in address_keywords:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                # Lấy địa chỉ dài nhất (thường là đầy đủ nhất)
+                address = max(matches, key=len)
+                # Làm sạch địa chỉ
+                address = re.sub(r'\s+', ' ', address)
+                address = address.strip()
+                return address
+
+        # Fallback: tìm dòng có chứa địa chỉ
+        lines = text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if any(kw in line.lower() for kw in ['phường', 'quận', 'huyện', 'tỉnh', 'thành phố']):
+                # Loại bỏ số điện thoại và mã nếu có
+                cleaned = re.sub(r'\b0\d{9,10}\b', '', line)
+                cleaned = re.sub(r'\b\d{5,6}\b', '', cleaned)
+                cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+                if len(cleaned) > 20:  # Địa chỉ phải có độ dài nhất định
+                    return cleaned
+
+        return ''
+
+    def _is_phone_number(self, text: str) -> bool:
+        """Kiểm tra xem text có chứa số điện thoại không"""
+        import re
+        # Tìm chuỗi số liên tiếp 10-11 chữ số bắt đầu bằng 0
+        pattern = r'0\d{9,10}'
+        return bool(re.search(pattern, text))
 
     def _extract_phone_number(self, text: str) -> str:
         """Trích xuất số điện thoại từ text"""
